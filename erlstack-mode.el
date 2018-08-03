@@ -13,13 +13,17 @@
 (defvar erlstack-overlay nil)
 (defvar erlstack-code-overlay nil)
 (defvar erlstack-code-window nil)
+(defvar erlstack-code-window-active nil)
 (defvar erlstack-code-buffer "*Erlstack code*")
 (defvar-local erlstack-buffer-file-name nil)
+(defvar-local erlstack-current-location nil)
 
-(defvar erlstack-mode-map
+(defvar erlstack-frame-mode-map
   (make-sparse-keymap))
 
-(define-key erlstack-mode-map (kbd "<return>") 'erlstack-visit-file)
+(define-key erlstack-frame-mode-map (kbd "<return>") 'erlstack-visit-file)
+(define-key erlstack-frame-mode-map (kbd "C-<up>")   'erlstack-up-frame)
+(define-key erlstack-frame-mode-map (kbd "C-<down>") 'erlstack-down-frame)
 
 (defvar erlstack-escaped-string-re
   "\"\\(\\([^\"]\\|\\\"\\)*\\)\"")
@@ -67,8 +71,7 @@
         (line-number (string-to-number (match-string 3))))
     (erlstack-try-show-file query line-number)
     (setq erlstack-overlay (make-overlay begin end))
-    (set-transient-map erlstack-mode-map t)
-    (use-local-map erlstack-stackframe-map)
+    (set-transient-map erlstack-frame-mode-map t)
     (overlay-put erlstack-overlay 'face 'erlstack-frame-face)))
 
 (defun erlstack-try-show-file (query line-number)
@@ -79,9 +82,7 @@
         (progn
           (setq-local erlstack-current-location `(,filename ,line-number))
           (erlstack-code-popup filename line-number))
-      (progn
-        (setq-local erlstack-current-location nil)
-        (bury-buffer erlstack-code-buffer)))))
+      (erlstack-frame-lost))))
 
 (defun erlstack-code-popup (filename line-number)
   "Opens a pop-up window with the code"
@@ -102,6 +103,7 @@
                                  (line-end-position)))
     (overlay-put erlstack-code-overlay 'face 'erlstack-frame-face))
   (setq erlstack-code-window (display-buffer erlstack-code-buffer))
+  (setq erlstack-code-window-active t)
   (set-window-point erlstack-code-window erlstack-code-buffer-posn))
 
 (defun erlstack-visit-file ()
@@ -110,6 +112,7 @@ editing"
   (interactive)
   (pcase erlstack-current-location
     (`(,filename ,line-number)
+     (print erlstack-code-window)
      (select-window erlstack-code-window)
      (find-file filename)
      (print `(,filename ,line-number))
@@ -122,7 +125,11 @@ editing"
     query))
 
 (defun erlstack-frame-lost ()
-  "This fuction is called when point leaves stack frame")
+  "This fuction is called when point leaves stack frame"
+  (when erlstack-code-window-active
+    (message "Lost my window")
+    (switch-to-prev-buffer erlstack-code-window)
+    (setq erlstack-code-window-active nil)))
 
 (defun erlstack-run-at-point ()
   "Attempt to analyze stack frame at the point"
@@ -151,4 +158,6 @@ line of the code"
  :group 'erlstack
  :lighter " es"
  :global t
- (add-hook 'post-command-hook #'erlstack-run-at-point))
+ (if erlstack-mode
+     (add-hook 'post-command-hook #'erlstack-run-at-point)
+   (remove-hook 'post-command-hook #'erlstack-run-at-point)))
