@@ -11,10 +11,15 @@
   (--reduce (concat acc "[[:space:]]*" it) re))
 
 (defvar erlstack-overlay nil)
-
 (defvar erlstack-code-overlay nil)
-
+(defvar erlstack-code-window nil)
 (defvar erlstack-code-buffer "*Erlstack code*")
+(defvar-local erlstack-buffer-file-name nil)
+
+(defvar erlstack-mode-map
+  (make-sparse-keymap))
+
+(define-key erlstack-mode-map (kbd "<return>") 'erlstack-visit-file)
 
 (defvar erlstack-escaped-string-re
   "\"\\(\\([^\"]\\|\\\"\\)*\\)\"")
@@ -62,28 +67,54 @@
         (line-number (string-to-number (match-string 3))))
     (erlstack-try-show-file query line-number)
     (setq erlstack-overlay (make-overlay begin end))
+    (set-transient-map erlstack-mode-map t)
+    (use-local-map erlstack-stackframe-map)
     (overlay-put erlstack-overlay 'face 'erlstack-frame-face)))
 
 (defun erlstack-try-show-file (query line-number)
   "Search for a file"
   (let ((filename
          (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number)))
-    (when filename
-      (with-current-buffer (get-buffer-create erlstack-code-buffer)
-        (erase-buffer)
-        (insert-file-contents filename)
-        (with-no-warnings
-          (goto-line line-number))
-        (setq erlstack-code-buffer-posn (point))
-        (when erlstack-code-overlay
-          (delete-overlay erlstack-code-overlay))
-        (setq erlstack-code-overlay (make-overlay
-                                     (line-beginning-position)
-                                     (line-end-position)))
-        (overlay-put erlstack-code-overlay 'face 'erlstack-frame-face)
-        (erlang-mode))
-      (set-window-point (display-buffer erlstack-code-buffer)
-                        erlstack-code-buffer-posn))))
+    (if filename
+        (progn
+          (setq-local erlstack-current-location `(,filename ,line-number))
+          (erlstack-code-popup filename line-number))
+      (progn
+        (setq-local erlstack-current-location nil)
+        (bury-buffer erlstack-code-buffer)))))
+
+(defun erlstack-code-popup (filename line-number)
+  "Opens a pop-up window with the code"
+  (with-current-buffer (get-buffer-create erlstack-code-buffer)
+    (when (not (string= filename erlstack-buffer-file-name))
+      (message "Erlstack visits file: %s" filename)
+      (erase-buffer)
+      (insert-file-contents filename)
+      (setq-local erlstack-buffer-file-name filename)
+      (erlang-mode))
+    (with-no-warnings
+      (goto-line line-number))
+    (setq erlstack-code-buffer-posn (point))
+    (when erlstack-code-overlay
+      (delete-overlay erlstack-code-overlay))
+    (setq erlstack-code-overlay (make-overlay
+                                 (line-beginning-position)
+                                 (line-end-position)))
+    (overlay-put erlstack-code-overlay 'face 'erlstack-frame-face))
+  (setq erlstack-code-window (display-buffer erlstack-code-buffer))
+  (set-window-point erlstack-code-window erlstack-code-buffer-posn))
+
+(defun erlstack-visit-file ()
+  "Open file related to the currently selected stack frame for
+editing"
+  (interactive)
+  (pcase erlstack-current-location
+    (`(,filename ,line-number)
+     (select-window erlstack-code-window)
+     (find-file filename)
+     (print `(,filename ,line-number))
+     (with-no-warnings
+       (goto-line line-number)))))
 
 (defun erlstack-try-fullname (query line)
   "Try search for local file matching full path"
