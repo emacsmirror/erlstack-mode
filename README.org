@@ -1,0 +1,23 @@
+#+TITLE: Analyze Erlang stack traces
+
+[[file:pictures/screencap.gif]]
+
+Enable =erlstack-mode= globally to peek at the source code of functions appearing in Erlang stack traces:
+
+#+BEGIN_SRC elisp
+(require 'erlstack-mode)
+#+END_SRC
+
+Moving point to a stack trace will reveal code in question. This plugin works the best with =projectile=.
+
+* Customizations
+
+The following variables can be customized:
+
+** erlstack-file-search-hook
+
+A hook that is used to lookup source code files
+
+** erlstack-otp-src-path
+
+Path to the OTP source code. Customize this variable to locate OTP modules.

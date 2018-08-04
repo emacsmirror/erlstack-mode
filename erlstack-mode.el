@@ -22,8 +22,6 @@
 
 ;;; Code:
 
-(provide 'erlstack-mode)
-
 (defgroup erlstack nil
   "Locate source code mantioned in `erlang' stacktraces"
   :group 'erlang
@@ -79,6 +77,7 @@
 (defvar erlstack-code-buffer nil)
 (defvar-local erlstack-buffer-file-name nil)
 (defvar-local erlstack-current-location nil)
+;(defvar erlstack-preferred-alternative (make-hash-table :test 'equal))
 
 (defvar erlstack-frame-mode-map
   (make-sparse-keymap))
@@ -114,12 +113,13 @@
 ;;; Custom items:
 
 (defcustom erlstack-file-search-hook
-  '(erlstack-locate-abspath erlstack-locate-otp erlstack-locate-projectile)
+  '(erlstack-locate-abspath
+    erlstack-locate-otp)
   "List of hooks used to search project files"
   :options '(erlstack-locate-abspath
-             erlstack-locate-existing-buffer
              erlstack-locate-otp
-             erlstack-locate-projectile)
+             erlstack-locate-projectile
+             erlstack-locate-existing-buffer)
   :group 'erlstack
   :type 'hook)
 
@@ -308,10 +308,10 @@ editing"
 
 (defun erlstack-locate-existing-buffer (query line)
   "Try matching existing buffers with the query"
-  (let ((query- (file-name-nondirectory query))
-        (--filter
-         (string= query- (file-name-nondirectory (buffer-file-name it)))
-         (buffer-list)))))
+  (let ((query- (file-name-nondirectory query)))
+    (--filter
+     (and it (string= query- (file-name-nondirectory it)))
+     (--map (buffer-file-name it) (buffer-list)))))
 
 (define-minor-mode erlstack-mode
  "Parse Erlang stacktrace under point and quickly navigate to the
@@ -323,6 +323,8 @@ line of the code"
  (if erlstack-mode
      (add-hook 'post-command-hook #'erlstack-run-at-point)
    (remove-hook 'post-command-hook #'erlstack-run-at-point)))
+
+(provide 'erlstack-mode)
 
 ;;; Example stacktrace:
 ;;
