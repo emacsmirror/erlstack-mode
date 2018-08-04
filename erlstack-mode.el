@@ -23,11 +23,54 @@
 ;;; Code:
 
 (provide 'erlstack-mode)
+
+(defgroup erlstack nil
+  "Locate source code mantioned in `erlang' stacktraces"
+  :group 'erlang
+  :prefix "erlstack-")
+
 (require 'dash)
 
-(defun erlstack-whitespacify-concat (&rest re)
-  "Intercalate strings with regexp matching whitespace"
-  (--reduce (concat acc "[ \t\n]*" it) re))
+;;; Macros:
+
+(defvar erlstack-caches-global nil)
+(defvar erlstack-caches-local nil)
+
+(defmacro erlstack-defcache (ctype name &rest args)
+  "Creates a new cache variable together with a getter function"
+  (let ((cache-put-fun (pcase ctype
+                         ('local 'setq-local)
+                         ('global 'setq)))
+        (getter-name (intern
+                      (concat "erlstack-cache-"
+                              (symbol-name name))))
+        (cache-name (intern
+                     (concat "erlstack-cache-"
+                             (symbol-name name)
+                             "-store")))
+        (caches-var (pcase ctype
+                         ('local 'erlstack-caches-local)
+                         ('global 'erlstack-caches-global))))
+    `(progn
+       (,cache-put-fun ,cache-name ,(cons 'make-hash-table args))
+       (add-to-list (quote ,caches-var) (quote ,cache-name))
+
+       (defun ,getter-name (key fun)
+         (let ((cached (gethash key ,cache-name nil)))
+           (if cached
+               cached
+             (puthash key (eval fun) ,cache-name)))))))
+
+(defmacro erlstack-jump-frame (fun dir)
+  `(let* ((bound      nil) ;;(,dir (point) erlstack-lookup-window))
+          (next-frame (save-excursion
+                        (erlstack-goto-stack-begin)
+                        ,fun)))
+     (when next-frame
+       (goto-char next-frame)
+       (erlstack-goto-stack-begin))))
+
+;;; Variables:
 
 (defvar erlstack-overlay nil)
 (defvar erlstack-code-overlay nil)
@@ -43,6 +86,12 @@
 (define-key erlstack-frame-mode-map (kbd "C-<return>") 'erlstack-visit-file)
 (define-key erlstack-frame-mode-map (kbd "C-<up>")     'erlstack-up-frame)
 (define-key erlstack-frame-mode-map (kbd "C-<down>")   'erlstack-down-frame)
+
+;;; Regular expressions:
+
+(defun erlstack-whitespacify-concat (&rest re)
+  "Intercalate strings with regexp matching whitespace"
+  (--reduce (concat acc "[ \t\n]*" it) re))
 
 (defvar erlstack-string-re
   "\"\\([^\"]*\\)\"")
@@ -62,20 +111,29 @@
 (defvar erlstack-stack-end-re
   "}]}")
 
+;;; Custom items:
+
 (defcustom erlstack-file-search-hook
-  '(erlstack-locate-abspath)
+  '(erlstack-locate-abspath erlstack-locate-otp erlstack-locate-projectile)
   "List of hooks used to search project files"
   :options '(erlstack-locate-abspath
+             erlstack-locate-existing-buffer
              erlstack-locate-otp
              erlstack-locate-projectile)
   :group 'erlstack
   :type 'hook)
 
-(defcustom erlstack-lookup-window
-  300
+(defcustom erlstack-lookup-window 300
   "Size of lookup window"
   :group 'erlstack
   :type 'integer)
+
+(defcustom erlstack-otp-src-path ""
+  "Path to the OTP source code"
+  :group 'erlstack
+  :type 'string)
+
+;;; Faces:
 
 (defface erlstack-frame-face
   '((((background light))
@@ -84,12 +142,15 @@
     (((background dark))
      :background "orange"
      :foreground "red"))
-  "The face for matched `erlstack' stack frame")
+  "Stack frame highlighting face")
+
+;;; Internal functions:
 
 (defun erlstack-frame-found (begin end)
   "This fuction is called when point enters stack frame"
   (let ((query       (match-string 1))
         (line-number (string-to-number (match-string 2))))
+    (setq-local erlstack-current-location `(,query ,line-number))
     (erlstack-try-show-file query line-number)
     (setq erlstack-overlay (make-overlay begin end))
     (set-transient-map erlstack-frame-mode-map t)
@@ -97,12 +158,11 @@
 
 (defun erlstack-try-show-file (query line-number)
   "Search for a file"
-  (let ((filename
+  (let ((candidates
          (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number)))
-    (if filename
+    (if candidates
         (progn
-          (setq-local erlstack-current-location `(,filename ,line-number))
-          (erlstack-code-popup filename line-number))
+          (erlstack-code-popup (car candidates) line-number))
       (erlstack-frame-lost))))
 
 (defun erlstack-code-popup (filename line-number)
@@ -134,11 +194,6 @@ editing"
        (select-window erlstack-code-window)
        (with-no-warnings
          (goto-line line-number))))))
-
-(defun erlstack-locate-abspath (query line)
-  "Try search for local file with absolute path"
-  (when (file-exists-p query)
-    query))
 
 (defun erlstack-frame-lost ()
   "This fuction is called when point leaves stack frame"
@@ -172,6 +227,8 @@ editing"
       (when (and begin end (>= point begin))
         `(,begin ,end)))))
 
+;;; Stack navigation:
+
 (defun erlstack-goto-stack-begin ()
   (goto-char (nth 0 (erlstack-parse-at-point))))
 
@@ -185,15 +242,6 @@ editing"
 ;; original path"
 ;;   (interactive)
 
-(defmacro erlstack-jump-frame (fun dir)
-  `(let* ((bound      (,dir (point) erlstack-lookup-window))
-          (next-frame (save-excursion
-                        (erlstack-goto-stack-begin)
-                        ,fun)))
-     (when next-frame
-       (goto-char next-frame)
-       (erlstack-goto-stack-begin))))
-
 (defun erlstack-up-frame ()
   "Move one stack frame up"
   (interactive)
@@ -205,6 +253,65 @@ editing"
   (interactive)
   (erlstack-jump-frame
    (re-search-forward erlstack-file-re bound t 2) +))
+
+;;; User commands:
+
+(defun erlstack-drop-caches ()
+  "Drop all `erlstack' caches"
+  (interactive)
+  (mapcar (lambda (it)
+            (clrhash (eval it))
+            (message "erlstack-mode: Cleared %s" it))
+          erlstack-caches-global)
+  (mapcar (lambda (buff)
+            (mapcar (lambda (var)
+                      (with-current-buffer buff
+                        (when (boundp var)
+                          (clrhash (eval var))
+                          (message "erlstack-mode: Cleared %s in %s" var buff))))
+                    erlstack-caches-local))
+            (buffer-list)))
+
+;;; Locate source hooks:
+
+(defun erlstack-locate-abspath (query line)
+  "Try absolute path"
+  (when (file-exists-p query)
+    (list query)))
+
+(erlstack-defcache global otp-files
+                   :test 'equal)
+
+(defun erlstack-locate-otp (query line)
+  "Try searching the file in the OTP sources"
+  (if (not (string-empty-p erlstack-otp-src-path))
+      (erlstack-cache-otp-files
+       query
+       `(directory-files-recursively erlstack-otp-src-path
+                                     ,(concat "^" query "$")))
+    (progn
+      (message "erlstack-mode: OTP path not specified")
+      nil)))
+
+(erlstack-defcache global projectile
+                   :test 'equal)
+
+(defun erlstack-locate-projectile (query line)
+  "Try searching the file in the current `projectile' root"
+  (let ((dir (projectile-project-root)))
+    (when dir
+      (erlstack-cache-projectile
+       (list dir query)
+       `(directory-files-recursively
+         ,dir
+         ,(concat "^" query "$"))))))
+
+(defun erlstack-locate-existing-buffer (query line)
+  "Try matching existing buffers with the query"
+  (let ((query- (file-name-nondirectory query))
+        (--filter
+         (string= query- (file-name-nondirectory (buffer-file-name it)))
+         (buffer-list)))))
 
 (define-minor-mode erlstack-mode
  "Parse Erlang stacktrace under point and quickly navigate to the
