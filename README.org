@@ -2,13 +2,23 @@
 
 [[file:pictures/screencap.gif]]
 
-Enable =erlstack-mode= globally to peek at the source code of functions appearing in Erlang stack traces:
+Enable =erlstack-mode= globally to peek at source code of functions appearing in Erlang stack traces:
 
 #+BEGIN_SRC elisp
 (require 'erlstack-mode)
 #+END_SRC
 
-Moving point to a stack trace will reveal code in question. This plugin works the best with =projectile=.
+Moving point to a stack trace will reveal code in question. This
+plugin works best with =projectile=, however it's not a hard
+requirement.
+
+* Key bindings
+
+The following key mappings are activated while point is on a stack trace:
+
+ - =C-<up>= Jump to the next stack frame
+ - =C-<down>= Jump to the previous stack frame
+ - =C-<return>= Open code for editing
 
 * Customizations
 
@@ -16,8 +26,14 @@ The following variables can be customized:
 
 ** erlstack-file-search-hook
 
-A hook that is used to lookup source code files
+A hook that is used to locate source code paths of Erlang modules
 
 ** erlstack-otp-src-path
 
 Path to the OTP source code. Customize this variable to locate OTP modules.
+
+** erlstack-file-prefer-hook
+
+A hook that is called when =erlstack-file-search-hook= returns
+multiple paths for a module. It can be used to pick the preferred
+alternative

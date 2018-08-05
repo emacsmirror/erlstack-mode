@@ -113,13 +113,25 @@
 ;;; Custom items:
 
 (defcustom erlstack-file-search-hook
-  '(erlstack-locate-abspath
-    erlstack-locate-otp)
-  "List of hooks used to search project files"
+  '(erlstack-locate-projectile
+    erlstack-locate-otp
+    erlstack-locate-abspath
+    erlstack-locate-existing-buffer)
+  "A hook that is used to locate source code paths of Erlang
+modules"
   :options '(erlstack-locate-abspath
              erlstack-locate-otp
              erlstack-locate-projectile
              erlstack-locate-existing-buffer)
+  :group 'erlstack
+  :type 'hook)
+
+(defcustom erlstack-file-prefer-hook
+  '(erlstack-prefer-no-rebar-tmp)
+  "A hook that is called when `erlstack-file-search-hook' returns
+multiple paths for a module. It can be used to pick the preferred
+alternative"
+  :options '(erlstack-prefer-no-rebar-tmp)
   :group 'erlstack
   :type 'hook)
 
@@ -158,11 +170,14 @@
 
 (defun erlstack-try-show-file (query line-number)
   "Search for a file"
-  (let ((candidates
-         (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number)))
-    (if candidates
+  ;(message "Trying to open file %s" query)
+  (let* ((candidates
+          (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number))
+         (filename
+          (car (run-hook-with-args-until-success 'erlstack-file-prefer-hook query line-number candidates))))
+    (if filename
         (progn
-          (erlstack-code-popup (car candidates) line-number))
+          (erlstack-code-popup filename line-number))
       (erlstack-frame-lost))))
 
 (defun erlstack-code-popup (filename line-number)
@@ -235,12 +250,27 @@ editing"
 (defun erlstack-goto-stack-end ()
   (goto-char (nth 1 (erlstack-parse-at-point))))
 
-;; (defun erlstack-check-rebar-tmp-dir ()
-;;   "Check if the opened Erlang file is a temporary one created by
-;; rebar and prompt to open the original. Basically it detects
-;; presense of \"_build\" directory in the path and tries to guess
-;; original path"
-;;   (interactive)
+(defun erlstack-rebar-tmp-dirp (path)
+  "Pretty dumb check that `path' is a temporary file created by
+rebar3. This function returns parent directory of rebar's temp
+drectory or `nil' otherwise"
+  (let ((up (directory-file-name (file-name-directory path)))
+        (dir (file-name-nondirectory path)))
+    (if (string= up path)
+        nil
+      (if (string= dir "_build")
+          up
+        (erlstack-rebar-tmp-dirp up)))))
+
+
+(defun erlstack-prefer-no-rebar-tmp (query line-number candidates)
+  "Removes rebar3 temporary files when the originals are found in the list"
+  (interactive)
+  ;; TODO check that the removed files actually match with the ones
+  ;; that left?
+  (if (cdr candidates)
+      (--filter (not (erlstack-rebar-tmp-dirp it)) candidates)
+    candidates))
 
 (defun erlstack-up-frame ()
   "Move one stack frame up"
@@ -298,24 +328,25 @@ editing"
 
 (defun erlstack-locate-projectile (query line)
   "Try searching the file in the current `projectile' root"
-  (let ((dir (projectile-project-root)))
+  (let ((dir (projectile-project-root))
+        (query- (file-name-nondirectory query)))
     (when dir
       (erlstack-cache-projectile
        (list dir query)
        `(directory-files-recursively
          ,dir
-         ,(concat "^" query "$"))))))
+         ,(concat "^" query- "$"))))))
 
 (defun erlstack-locate-existing-buffer (query line)
   "Try matching existing buffers with the query"
   (let ((query- (file-name-nondirectory query)))
     (--filter
-     (and it (string= query- (file-name-nondirectory it)))
-     (--map (buffer-file-name it) (buffer-list)))))
+     (string= query- (file-name-nondirectory it))
+     (--filter it (--map (buffer-file-name it) (buffer-list))))))
 
 (define-minor-mode erlstack-mode
- "Parse Erlang stacktrace under point and quickly navigate to the
-line of the code"
+ "Parse Erlang stacktrace at the point and quickly navigate to
+the line of the code"
  :keymap nil
  :group 'erlstack
  :lighter " es"
