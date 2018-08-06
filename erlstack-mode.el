@@ -173,8 +173,15 @@ alternative"
   ;(message "Trying to open file %s" query)
   (let* ((candidates
           (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number))
+         (candidates-
+          (run-hook-with-args-until-success 'erlstack-file-prefer-hook
+                                            query
+                                            line-number
+                                            candidates))
          (filename
-          (car (run-hook-with-args-until-success 'erlstack-file-prefer-hook query line-number candidates))))
+          (car (if candidates-
+                   candidates-
+                 candidates))))
     (if filename
         (progn
           (erlstack-code-popup filename line-number))
@@ -314,14 +321,15 @@ drectory or `nil' otherwise"
 
 (defun erlstack-locate-otp (query line)
   "Try searching the file in the OTP sources"
-  (if (not (string-empty-p erlstack-otp-src-path))
-      (erlstack-cache-otp-files
-       query
-       `(directory-files-recursively erlstack-otp-src-path
-                                     ,(concat "^" query "$")))
-    (progn
-      (message "erlstack-mode: OTP path not specified")
-      nil)))
+  (let ((query- (file-name-nondirectory query)))
+    (if (not (string-empty-p erlstack-otp-src-path))
+        (erlstack-cache-otp-files
+         query-
+         `(directory-files-recursively erlstack-otp-src-path
+                                       ,(concat "^" query- "$")))
+      (progn
+        (message "erlstack-mode: OTP path not specified")
+        nil))))
 
 (erlstack-defcache global projectile
                    :test 'equal)
