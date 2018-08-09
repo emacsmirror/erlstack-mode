@@ -4,7 +4,7 @@
 ;; Keywords: tools, erlang
 ;; Version: 0.1.1
 ;; Homepage: https://github.com/k32/erlstack-mode
-;; Package-Requires: ((emacs "25.1"))
+;; Package-Requires: ((emacs "25.1") (dash "2.12.0"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
