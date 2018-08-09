@@ -33,7 +33,7 @@
 ;;; Code:
 
 (defgroup erlstack nil
-  "Locate source code mantioned in `erlang' stacktraces."
+  "Locate source code mentioned in `erlang' stacktraces."
   :group 'erlang
   :prefix "erlstack-")
 
