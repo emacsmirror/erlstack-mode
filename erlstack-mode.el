@@ -1,4 +1,4 @@
-;;; erlstack-mode.el --- Minor mode for analyzing Erlang stacktraces -*- lexical-binding: t; -*-
+;;; erlstack-mode.el --- Minor mode for analysing Erlang stacktraces -*- lexical-binding: t; -*-
 
 ;; Author: k32
 ;; Keywords: tools, erlang
@@ -238,7 +238,7 @@ alternative"
     (setq erlstack--code-window-active nil)))
 
 (defun erlstack-run-at-point ()
-  "Attempt to analyze stack frame at the point."
+  "Attempt to analyse stack frame at the point."
   (interactive)
   (run-with-idle-timer
    0.1 nil
