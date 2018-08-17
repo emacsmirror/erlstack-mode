@@ -1,4 +1,4 @@
-#+TITLE: Analyze Erlang stack traces
+#+TITLE: Analyse Erlang stack traces
 
 [[file:pictures/screencap.gif]]
 
