@@ -2,7 +2,7 @@
 
 ;; Author: k32
 ;; Keywords: tools, erlang
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Homepage: https://github.com/k32/erlstack-mode
 ;; Package-Requires: ((emacs "25.1") (dash "2.12.0"))
 
@@ -145,7 +145,8 @@
   "A hook that is called when `erlstack-file-search-hook' returns
 multiple paths for a module. It can be used to pick the preferred
 alternative"
-  :options '(erlstack-prefer-no-rebar-tmp)
+  :options '(erlstack-prefer-no-rebar-tmp
+             erlstack-prefer-library-modules)
   :group 'erlstack
   :type 'hook)
 
@@ -176,6 +177,9 @@ alternative"
   "This fuction is called with arguments BEGIN END when point enters stack frame."
   (let ((query       (match-string 1))
         (line-number (string-to-number (match-string 2))))
+    ;; Hack: preserve initial state of the code window by restoring it
+    (when erlstack--code-window-active
+      (quit-restore-window erlstack--code-window))
     (setq-local erlstack--current-location `(,query ,line-number))
     (erlstack--try-show-file query line-number)
     (setq erlstack--overlay (make-overlay begin end))
@@ -188,10 +192,9 @@ alternative"
   (let* ((candidates
           (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number))
          (candidates-
-          (run-hook-with-args-until-success 'erlstack-file-prefer-hook
-                                            query
-                                            line-number
-                                            candidates))
+          (--reduce-r-from (funcall it query line-number acc)
+                           candidates
+                           erlstack-file-prefer-hook))
          (filename
           (car (if candidates-
                    candidates-
@@ -212,10 +215,7 @@ alternative"
                                  (line-beginning-position)
                                  (line-end-position)))
     (overlay-put erlstack--code-overlay 'face 'erlstack-active-frame)
-    (setq erlstack--code-window (display-buffer-in-side-window
-                                erlstack--code-buffer
-                                '((display-buffer-reuse-window
-                                   display-buffer-pop-up-window))))
+    (setq erlstack--code-window (display-buffer erlstack--code-buffer))
     (setq erlstack--code-window-active t)
     (set-window-point erlstack--code-window erlstack--code-buffer-posn)))
 
@@ -233,8 +233,7 @@ alternative"
 (defun erlstack--frame-lost ()
   "This fuction is called when point leaves stack frame."
   (when erlstack--code-window-active
-    ;; (switch-to-prev-buffer erlstack--code-window)
-    (delete-side-window erlstack--code-window)
+    (quit-restore-window erlstack--code-window)
     (setq erlstack--code-window-active nil)))
 
 (defun erlstack-run-at-point ()
@@ -293,6 +292,16 @@ drectory or `nil' otherwise."
       (--filter (not (erlstack-rebar-tmp-dirp it)) candidates)
     candidates))
 
+(defun erlstack-prefer-library-modules (_query _line-number candidates)
+  "Prefer OTP library modules over mocks"
+  (pcase (-separate 'erlstack--is-library-module candidates)
+    (`(,a ,b)
+     (append a b))))
+
+(defun erlstack--is-library-module (file)
+  (string= "src" (file-name-nondirectory
+                  (directory-file-name (file-name-directory file)))))
+
 (defun erlstack-up-frame ()
   "Move one stack frame up."
   (interactive)
@@ -333,7 +342,7 @@ drectory or `nil' otherwise."
 (defun erlstack-locate-otp (query _line)
   "Try searching for module QUERY in the OTP sources."
   (let ((query- (file-name-nondirectory query)))
-    (if (not (string-empty-p erlstack-otp-src-path))
+    (if (not (string= "" erlstack-otp-src-path))
         (erlstack--cache-otp-files
          query-
          `(directory-files-recursively erlstack-otp-src-path
