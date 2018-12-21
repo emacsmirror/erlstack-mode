@@ -160,6 +160,11 @@ alternative"
   :group 'erlstack
   :type 'string)
 
+(defcustom erlstack-popup-window-behavior '(display-buffer-pop-up-window)
+  "Used to pick a window to display the code buffer"
+  :group 'erlstack
+  :type 'sexp)
+
 ;;; Faces:
 
 (defface erlstack-active-frame
@@ -188,7 +193,6 @@ alternative"
 
 (defun erlstack--try-show-file (query line-number)
   "Search for the source code of module QUERY and navigate to LINE-NUMBER."
-  ;(message "Trying to open file %s" query)
   (let* ((candidates
           (run-hook-with-args-until-success 'erlstack-file-search-hook query line-number))
          (candidates-
@@ -215,7 +219,7 @@ alternative"
                                  (line-beginning-position)
                                  (line-end-position)))
     (overlay-put erlstack--code-overlay 'face 'erlstack-active-frame)
-    (setq erlstack--code-window (display-buffer erlstack--code-buffer))
+    (setq erlstack--code-window (display-buffer erlstack--code-buffer erlstack-popup-window-behavior))
     (setq erlstack--code-window-active t)
     (set-window-point erlstack--code-window erlstack--code-buffer-posn)))
 
@@ -233,7 +237,8 @@ alternative"
 (defun erlstack--frame-lost ()
   "This fuction is called when point leaves stack frame."
   (when erlstack--code-window-active
-    (quit-restore-window erlstack--code-window)
+    (unless (eq erlstack--code-window (selected-window))
+      (quit-restore-window erlstack--code-window))
     (setq erlstack--code-window-active nil)))
 
 (defun erlstack-run-at-point ()
@@ -385,13 +390,17 @@ the line of the code"
 
 (provide 'erlstack-mode)
 
-;;; Example stacktrace:
+;;; Example stacktraces:
 ;;
 ;; [{shell,apply_fun,3,[{file,"shell.erl"},{line,907}]},
 ;;  {erl_eval,do_apply,6,[{file,"erl_eval.erl"},{line,681}]},
 ;;  {erl_eval,try_clauses,8,[{file,"erl_eval.erl"},{line,911}]},
 ;;  { shell , exprs , 7 , [{file,"shell.erl"},{line,686}]},{shell,eval_exprs,7,[{file,"shell.erl"},{line,642}]},
 ;;  {shell,eval_loop,3,[ {file,"shell.erl"}, {line,627}]}]
+;;
+;; =ERROR REPORT==== 21-Dec-2018::19:23:26.292922 ===
+;; Error in process <0.88.0> with exit value:
+;; {1,[{shell,apply_fun,3,[{file,"shell.erl"},{line,907}]}]}
 
 
 ;;; erlstack-mode.el ends here
