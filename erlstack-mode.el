@@ -2,7 +2,7 @@
 
 ;; Author: k32
 ;; Keywords: tools, erlang
-;; Version: 0.1.4
+;; Version: 0.1.5
 ;; Homepage: https://github.com/k32/erlstack-mode
 ;; Package-Requires: ((emacs "25.1") (dash "2.12.0"))
 
@@ -120,7 +120,7 @@
   (erlstack--whitespacify-concat "\\[" erlstack--file-re "," erlstack--line-re "]"))
 
 (defvar erlstack--stack-frame-re
-  (erlstack--whitespacify-concat "{[^{}]*" erlstack--position-re "}"))
+  (erlstack--whitespacify-concat erlstack--position-re "}"))
 
 (defvar erlstack--stack-end-re
   "}]}")
