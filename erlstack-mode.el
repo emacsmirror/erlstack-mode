@@ -2,7 +2,7 @@
 
 ;; Author: k32
 ;; Keywords: tools, erlang
-;; Version: 0.1.3
+;; Version: 0.1.4
 ;; Homepage: https://github.com/k32/erlstack-mode
 ;; Package-Requires: ((emacs "25.1") (dash "2.12.0"))
 
@@ -165,6 +165,11 @@ alternative"
   :group 'erlstack
   :type 'sexp)
 
+(defcustom erlstack-initial-delay 0.8
+  "Overlay delay, in seconds"
+  :group 'erlstack
+  :type 'float)
+
 ;;; Faces:
 
 (defface erlstack-active-frame
@@ -245,7 +250,9 @@ alternative"
   "Attempt to analyse stack frame at the point."
   (interactive)
   (run-with-idle-timer
-   0.1 nil
+   (if erlstack--code-window-active
+       0.1
+     erlstack-initial-delay) nil
    (lambda ()
      (when erlstack--overlay
        (delete-overlay erlstack--overlay))
