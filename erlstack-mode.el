@@ -2,7 +2,7 @@
 
 ;; Author: k32
 ;; Keywords: tools, erlang
-;; Version: 0.1.5
+;; Version: 0.2.0
 ;; Homepage: https://github.com/k32/erlstack-mode
 ;; Package-Requires: ((emacs "25.1") (dash "2.12.0"))
 
