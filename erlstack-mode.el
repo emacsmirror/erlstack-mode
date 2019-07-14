@@ -119,11 +119,19 @@
 (defvar erlstack--position-re
   (erlstack--whitespacify-concat "\\[" erlstack--file-re "," erlstack--line-re "]"))
 
-(defvar erlstack--stack-frame-re
+(defvar erlstack--stack-frame-old-re
   (erlstack--whitespacify-concat erlstack--position-re "}"))
+(defvar erlstack--stack-frame-new-re
+  (erlstack--whitespacify-concat "(\\(.+\\.erl\\)," "line" "\\([[:digit:]]+\\))"))
+(defvar erlstack--stack-frame-re
+  (concat erlstack--stack-frame-old-re "\\|" erlstack--stack-frame-new-re))
 
+(defvar erlstack--stack-end-new-re ")$")
+(defvar erlstack--stack-end-old-re "}]}")
 (defvar erlstack--stack-end-re
-  "}]}")
+  (concat erlstack--stack-end-old-re
+          "\\|"
+          erlstack--stack-end-new-re))
 
 ;;; Custom items:
 
@@ -262,14 +270,23 @@ alternative"
        (`(,begin ,end) (erlstack--frame-found begin end))
        (_              (erlstack--frame-lost))))))
 
+(defun erlstack--re-search-backward (res)
+  (let ((bound (save-excursion (forward-line -1)
+                               (line-beginning-position))))
+    (dolist (i res)
+      (when (re-search-backward i bound t)
+        (return (point))))))
+
 (defun erlstack--parse-at-point ()
   "Attempt to find stacktrace at point."
   (save-excursion
     (let ((point (point))
           (end (re-search-forward erlstack--stack-end-re
-                                  (+ (point) erlstack-lookup-window) t))
-          (begin (re-search-backward erlstack--stack-frame-re
-                                     (- (point) erlstack-lookup-window) t)))
+                                  (save-excursion (forward-line 1)
+                                                  (line-end-position))
+                                  t))
+          (begin (erlstack--re-search-backward `(,erlstack--stack-frame-old-re
+                                                 ,erlstack--stack-frame-new-re))))
       (when (and begin end (>= point begin))
         `(,begin ,end)))))
 
@@ -318,13 +335,15 @@ drectory or `nil' otherwise."
   "Move one stack frame up."
   (interactive)
   (erlstack-jump-frame
-   (re-search-backward erlstack--file-re bound t)))
+   (re-search-backward erlstack--stack-frame-re bound t)))
 
 (defun erlstack-down-frame ()
   "Move one stack frame down."
   (interactive)
   (erlstack-jump-frame
-   (re-search-forward erlstack--file-re bound t 2)))
+   (progn
+     (re-search-forward erlstack--stack-frame-re bound t 2)
+     (re-search-backward erlstack--stack-frame-re bound t)))) ;; TODO: refactor this hack \^////
 
 ;;; User commands:
 
@@ -367,14 +386,15 @@ drectory or `nil' otherwise."
 
 (defun erlstack-locate-projectile (query _line)
   "Try searching for module QUERY in the current `projectile' root."
-  (let ((dir (projectile-project-root))
-        (query- (file-name-nondirectory query)))
-    (when dir
-      (erlstack--cache-projectile
-       (list dir query)
-       `(directory-files-recursively
-         ,dir
-         ,(concat "^" query- "$"))))))
+  (when (fboundp 'projectile-project-root)
+    (let ((dir (projectile-project-root))
+          (query- (file-name-nondirectory query)))
+      (when dir
+        (erlstack--cache-projectile
+         (list dir query)
+         `(directory-files-recursively
+           ,dir
+           ,(concat "^" query- "$")))))))
 
 (defun erlstack-locate-existing-buffer (query _line)
   "Try matching existing buffers with QUERY."
@@ -396,18 +416,5 @@ the line of the code"
    (remove-hook 'post-command-hook #'erlstack-run-at-point)))
 
 (provide 'erlstack-mode)
-
-;;; Example stacktraces:
-;;
-;; [{shell,apply_fun,3,[{file,"shell.erl"},{line,907}]},
-;;  {erl_eval,do_apply,6,[{file,"erl_eval.erl"},{line,681}]},
-;;  {erl_eval,try_clauses,8,[{file,"erl_eval.erl"},{line,911}]},
-;;  { shell , exprs , 7 , [{file,"shell.erl"},{line,686}]},{shell,eval_exprs,7,[{file,"shell.erl"},{line,642}]},
-;;  {shell,eval_loop,3,[ {file,"shell.erl"}, {line,627}]}]
-;;
-;; =ERROR REPORT==== 21-Dec-2018::19:23:26.292922 ===
-;; Error in process <0.88.0> with exit value:
-;; {1,[{shell,apply_fun,3,[{file,"shell.erl"},{line,907}]}]}
-
 
 ;;; erlstack-mode.el ends here
