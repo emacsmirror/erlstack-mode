@@ -271,7 +271,7 @@ alternative"
        (_              (erlstack--frame-lost))))))
 
 (defun erlstack--re-search-backward (res)
-  (let ((bound (save-excursion (forward-line -1)
+  (let ((bound (save-excursion (forward-line -2)
                                (line-beginning-position))))
     (dolist (i res)
       (when (re-search-backward i bound t)
@@ -282,7 +282,7 @@ alternative"
   (save-excursion
     (let ((point (point))
           (end (re-search-forward erlstack--stack-end-re
-                                  (save-excursion (forward-line 1)
+                                  (save-excursion (forward-line 2)
                                                   (line-end-position))
                                   t))
           (begin (erlstack--re-search-backward `(,erlstack--stack-frame-old-re
