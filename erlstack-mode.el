@@ -168,11 +168,6 @@ alternative"
   :group 'erlstack
   :type 'string)
 
-(defcustom erlstack-popup-window-behavior '(display-buffer-pop-up-window)
-  "Used to pick a window to display the code buffer"
-  :group 'erlstack
-  :type 'sexp)
-
 (defcustom erlstack-initial-delay 0.8
   "Overlay delay, in seconds"
   :group 'erlstack
@@ -232,7 +227,7 @@ alternative"
                                  (line-beginning-position)
                                  (line-end-position)))
     (overlay-put erlstack--code-overlay 'face 'erlstack-active-frame)
-    (setq erlstack--code-window (display-buffer erlstack--code-buffer erlstack-popup-window-behavior))
+    (setq erlstack--code-window (display-buffer erlstack--code-buffer `(nil . ((inhibit-same-window . ,pop-up-windows)))))
     (setq erlstack--code-window-active t)
     (set-window-point erlstack--code-window erlstack--code-buffer-posn)))
 
