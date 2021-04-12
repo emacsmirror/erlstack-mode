@@ -270,7 +270,7 @@ alternative"
                                (line-beginning-position))))
     (dolist (i res)
       (when (re-search-backward i bound t)
-        (return (point))))))
+        (cl-return (point))))))
 
 (defun erlstack--parse-at-point ()
   "Attempt to find stacktrace at point."
