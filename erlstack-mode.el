@@ -265,12 +265,12 @@ alternative"
        (`(,begin ,end) (erlstack--frame-found begin end))
        (_              (erlstack--frame-lost))))))
 
-(defun erlstack--re-search-backward (res)
+(defun erlstack--re-search-backward ()
   (let ((bound (save-excursion (forward-line -2)
                                (line-beginning-position))))
-    (dolist (i res)
-      (when (re-search-backward i bound t)
-        (cl-return (point))))))
+    (or
+     (re-search-backward erlstack--stack-frame-old-re bound t)
+     (re-search-backward erlstack--stack-frame-new-re bound t))))
 
 (defun erlstack--parse-at-point ()
   "Attempt to find stacktrace at point."
@@ -280,8 +280,7 @@ alternative"
                                   (save-excursion (forward-line 2)
                                                   (line-end-position))
                                   t))
-          (begin (erlstack--re-search-backward `(,erlstack--stack-frame-old-re
-                                                 ,erlstack--stack-frame-new-re))))
+          (begin (erlstack--re-search-backward)))
       (when (and begin end (>= point begin))
         `(,begin ,end)))))
 
