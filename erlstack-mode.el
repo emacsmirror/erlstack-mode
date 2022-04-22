@@ -191,7 +191,7 @@ alternative"
   (let ((query       (match-string 1))
         (line-number (string-to-number (match-string 2))))
     ;; Hack: preserve initial state of the code window by restoring it
-    (when erlstack--code-window-active
+    (when (and erlstack--code-window-active (window-live-p erlstack--code-window))
       (quit-restore-window erlstack--code-window))
     (setq-local erlstack--current-location `(,query ,line-number))
     (erlstack--try-show-file query line-number)
