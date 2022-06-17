@@ -402,7 +402,7 @@ drectory or `nil' otherwise."
 the line of the code"
  :keymap nil
  :group 'erlstack
- :lighter " es"
+ :lighter " \u2622"
  :global t
  :require 'erlstack-mode
  (if erlstack-mode
