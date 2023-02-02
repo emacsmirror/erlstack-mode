@@ -175,9 +175,9 @@ alternative"
   :type 'float)
 
 (defcustom erlstack-popup-window-alist
-  '((display-buffer-reuse-window . nil)
-    (display-buffer-reuse-mode-window . (mode . erlang))
-    (display-buffer-pop-up-window . (inhibit-same-window . t)))
+  '((display-buffer-reuse-window display-buffer-reuse-mode-window display-buffer-pop-up-window)
+    ((mode . erlang)
+     (inhibit-same-window . t)))
   "`display-buffer' alist used for the erlstack-mode preview window."
   :type 'sexp
   :group 'erlstack)
