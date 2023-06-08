@@ -155,6 +155,7 @@ Search runs these functions until one of them returns a result."
 multiple paths for a module. It can be used to pick the preferred
 alternative"
   :options '(erlstack-prefer-no-rebar-tmp
+             erlstack-prefer-no-otp-dialyzer-files
              erlstack-prefer-library-modules)
   :group 'erlstack
   :type 'hook)
@@ -333,6 +334,10 @@ drectory or `nil' otherwise."
 (defun erlstack--is-library-module (file)
   (string= "src" (file-name-nondirectory
                   (directory-file-name (file-name-directory file)))))
+
+(defun erlstack-prefer-no-otp-dialyzer-files (_query _line-number candidates)
+  "Filter out dialyzer test modules from the list of OTP files."
+  (--filter (not (string-match "test/.*SUITE_data/" it)) candidates))
 
 (defun erlstack-up-frame ()
   "Move one stack frame up."
